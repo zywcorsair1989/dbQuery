@@ -3,20 +3,33 @@ from openai import OpenAI
 import streamlit as st
 
 
-
-
 def get_completion(messages):
+    """
+    调用大模型API获取生成结果
+    :param messages: 对话消息列表
+    :return: 模型生成的文本内容
+    """
+    # 初始化 OpenAI 客户端，使用阿里云 DashScope API
     client = OpenAI(api_key=os.getenv("DASHSCOPE_API_KEY"),
                     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
 
+    # 调用通义千问模型生成响应
     response = client.chat.completions.create(
-        model='qwen3-coder-plus',
+        model='qwen3-coder-plus',  # 使用通义千问编码增强模型
         messages=messages,
-        temperature=0,
+        temperature=0,  # 温度设为0，确保输出稳定一致
     )
     return response.choices[0].message.content
 
+
 def gen_prompt(table_structures, sql_requirements, dbtype):
+    """
+    根据输入参数组装提示词并调用大模型生成SQL/Redis命令
+    :param table_structures: 表结构或Redis数据结构描述
+    :param sql_requirements: 用户查询需求（自然语言）
+    :param dbtype: 数据库类型（MySQL/Redis/SQL Server/Oracle/SQLite）
+    :return: 生成的SQL语句或Redis命令
+    """
     # 根据数据库类型选择不同的角色设定和示例
     if dbtype == 'Redis':
         # Redis 不使用 SQL，使用 Redis 命令
@@ -85,6 +98,8 @@ def gen_prompt(table_structures, sql_requirements, dbtype):
             生成的SQL：
             SELECT customer_id, SUM(price) AS total_spent FROM orders GROUP BY customer_id ORDER BY total_spent DESC LIMIT 1;
         """
+
+    # 组装完整提示词：角色设定 + 目标数据库类型 + 示例 + 表结构 + 用户需求
     prompt = f"""
             {instruction}
             # 目标数据库类型：
@@ -106,40 +121,46 @@ def gen_prompt(table_structures, sql_requirements, dbtype):
 
 # 可视化界面
 def main():
-    # 设置标题
+    """
+    Streamlit 主界面函数
+    提供用户交互界面，收集输入并调用大模型生成SQL/Redis命令
+    """
+    # 设置页面标题
     st.title("SQL语句生成器")
 
-    # 初始化 session_state
+    # 初始化 session_state，用于控制按钮状态（防止生成期间重复点击）
     if 'generating' not in st.session_state:
         st.session_state.generating = False
 
+    # 数据库类型选择下拉框
     dbtype = st.selectbox('请选择数据库类型:', ['MySQL', 'Redis', 'SQL Server', 'Oracle', 'SQLite'])
 
-    # 获取用户输入的表结构数量
+    # 获取用户输入的表结构数量（1-10）
     num_tables = st.number_input('请输入你需要填写的表结构数量:', min_value=1, max_value=10, step=1)
 
-    # 创建用于填写表结构的输入框
+    # 根据表结构数量动态创建多个输入框
     table_structures = ""
     for i in range(num_tables):
         table_structure = st.text_area(f"请输入表结构，第 {i + 1} 张表:")
         table_structures += table_structure + "\n"
 
-    # 新增SQL需求输入框
+    # SQL需求输入框（用户用自然语言描述查询需求）
     sql_requirements = st.text_area("请输入生成SQL的需求:")
 
-    # 当用户点击提交时，传递所有输入的数据到模型
-    # 使用 disabled 参数，生成期间禁用按钮
+    # 提交按钮：生成期间禁用，防止重复点击
     if st.button("提交", disabled=st.session_state.generating):
+        # 验证输入是否完整
         if all(table_structures) and sql_requirements:  # 检查是否所有的表结构和SQL需求都已经填写
             st.session_state.generating = True  # 开始生成，禁用按钮
             # 显示转圈动画，等待大模型生成结果
             with st.spinner('正在生成SQL，请稍候...'):
                 output = gen_prompt(table_structures, sql_requirements, dbtype)
-            st.success(output)
-            st.session_state.generating = False  # 生成完成，恢复按钮
+            st.success(output)  # 显示生成结果
+            st.session_state.generating = False  # 生成完成，恢复按钮可点击
         else:
-            st.warning("请确保所有表结构和SQL需求已经填写")
+            st.warning("请确保所有表结构和SQL需求已经填写")  # 提示用户完善输入
 
 
 if __name__ == '__main__':
+    # 程序入口：启动 Streamlit 应用
     main()
