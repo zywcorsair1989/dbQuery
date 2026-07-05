@@ -10,10 +10,13 @@
 | 数据库 | 查询语言 | 说明 |
 |--------|---------|------|
 | MySQL | SQL | 最流行的开源关系型数据库 |
+| PostgreSQL | SQL | 功能强大的开源关系型数据库 |
 | SQL Server | SQL | Microsoft 企业级数据库 |
 | Oracle | SQL | 企业级商业数据库 |
 | SQLite | SQL | 轻量级嵌入式数据库 |
+| MongoDB | MongoDB查询 | 文档型NoSQL数据库 |
 | Redis | Redis命令 | 高性能键值存储数据库 |
+| Chroma | Python API | 向量数据库，用于AI应用 |
 
 ---
 
@@ -132,16 +135,21 @@ Network URL: http://xxx.xxx.xxx.xxx:8501
 
 在下拉菜单中选择目标数据库类型：
 - MySQL
-- Redis
+- PostgreSQL
 - SQL Server
 - Oracle
 - SQLite
+- MongoDB
+- Redis
+- Chroma
 
 ### 步骤 2：输入数据结构数量
 
 输入需要查询涉及的数据结构数量（1-10）：
-- SQL数据库：输入表的数量
+- SQL数据库（MySQL/PostgreSQL/SQL Server/Oracle/SQLite）：输入表的数量
+- MongoDB：输入集合的数量
 - Redis：输入 Key 的数量
+- Chroma：输入向量集合的数量
 
 ### 步骤 3：输入数据结构
 
@@ -195,6 +203,65 @@ user:1 -> {name: "张三", age: 25, email: "zhangsan@example.com"}
 user:1:orders -> [order:1, order:2, order:3]
 inventory:phone -> 100
 user_spending -> {user:1: 13000, user:2: 5000}
+```
+
+#### MongoDB 集合结构格式
+
+```json
+// 集合名: collection_name
+{
+    "_id": ObjectId,
+    "字段1": "值1",
+    "字段2": 值2,
+    "嵌套字段": { "子字段": "值" },
+    "数组字段": ["元素1", "元素2"]
+}
+```
+
+**示例**：
+```json
+// 用户集合: users
+{
+    "_id": ObjectId,
+    "name": "张三",
+    "age": 25,
+    "email": "zhangsan@example.com",
+    "address": { "city": "北京", "street": "朝阳路" },
+    "orders": ["order1", "order2"]
+}
+
+// 订单集合: orders
+{
+    "_id": ObjectId,
+    "user_id": ObjectId("..."),
+    "product": "手机",
+    "amount": 5000,
+    "status": 1,
+    "create_time": ISODate("2024-01-01")
+}
+```
+
+#### Chroma 集合结构格式
+
+```python
+# 集合名称: collection_name
+# 字段说明:
+# - id: 文档唯一标识（字符串）
+# - embedding: 向量维度（如768）
+# - metadata: 元数据字段（如title, author, category）
+# - document: 文档内容（字符串）
+```
+
+**示例**：
+```python
+# 文档集合: documents
+集合名称: documents
+向量维度: 768
+metadata字段: title, author, category, create_time
+
+# 向量查询需求示例
+查询与"人工智能"相关的文档
+返回结果数: 5
 ```
 
 ### 步骤 4：输入查询需求
@@ -274,7 +341,47 @@ LRANGE user:1:orders 0 -1
 
 ---
 
-### 示例 4：复杂聚合查询
+### 示例 4：MongoDB 查询
+
+| 输入项 | 内容 |
+|--------|------|
+| 数据库类型 | MongoDB |
+| 集合数量 | 2 |
+| 集合结构1 | `users: { "_id": ObjectId, "name": String, "age": Int, "city": String, "orders": Array }` |
+| 集合结构2 | `orders: { "_id": ObjectId, "user_id": ObjectId, "product": String, "amount": Decimal, "status": Int }` |
+| 查询需求 | 查询年龄大于20岁且居住在北京的用户 |
+
+**生成结果**：
+```javascript
+db.users.find({
+    "age": { "$gt": 20 },
+    "city": "北京"
+})
+```
+
+---
+
+### 示例 5：Chroma 向量查询
+
+| 输入项 | 内容 |
+|--------|------|
+| 数据库类型 | Chroma |
+| 集合数量 | 1 |
+| 集合结构 | `documents: 向量维度768, metadata包含title/author/category` |
+| 查询需求 | 查询与"机器学习"相关的技术文档，返回前10条，筛选category为"技术"的文档 |
+
+**生成结果**：
+```python
+results = collection.query(
+    query_texts=["机器学习"],
+    n_results=10,
+    where={"category": "技术"}
+)
+```
+
+---
+
+### 示例 6：复杂聚合查询
 
 | 输入项 | 内容 |
 |--------|------|

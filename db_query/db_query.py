@@ -25,10 +25,10 @@ def get_completion(messages):
 def gen_prompt(table_structures, sql_requirements, dbtype):
     """
     根据输入参数组装提示词并调用大模型生成SQL/Redis命令
-    :param table_structures: 表结构或Redis数据结构描述
+    :param table_structures: 表结构或数据结构描述
     :param sql_requirements: 用户查询需求（自然语言）
-    :param dbtype: 数据库类型（MySQL/Redis/SQL Server/Oracle/SQLite）
-    :return: 生成的SQL语句或Redis命令
+    :param dbtype: 数据库类型（MySQL/Redis/SQL Server/Oracle/SQLite/PostgreSQL/Chroma/MongoDB）
+    :return: 生成的SQL语句或查询命令
     """
     # 根据数据库类型选择不同的角色设定和示例
     if dbtype == 'Redis':
@@ -63,6 +63,102 @@ def gen_prompt(table_structures, sql_requirements, dbtype):
             生成的Redis命令：
             HGETALL user:1
         """
+    elif dbtype == 'MongoDB':
+        # MongoDB 使用查询语法，不是标准SQL
+        instruction = """
+            # 角色: 你是一位专业的MongoDB查询工程师
+            ## 技能: 可以根据MongoDB集合结构和用户输入，生成MongoDB查询语句。
+            """
+        examples = """
+            MongoDB集合结构如下：
+            # 用户集合（users）
+            {
+                "_id": ObjectId,
+                "name": "张三",
+                "age": 25,
+                "email": "zhangsan@example.com",
+                "city": "北京",
+                "orders": ["order1", "order2"]
+            }
+
+            # 订单集合（orders）
+            {
+                "_id": ObjectId,
+                "user_id": ObjectId("用户ID"),
+                "product": "手机",
+                "amount": 5000,
+                "status": 1,
+                "create_time": ISODate("2024-01-01")
+            }
+
+            用户需求：
+            查询年龄大于20岁的所有用户
+
+            生成的MongoDB查询：
+            db.users.find({ "age": { "$gt": 20 } })
+        """
+    elif dbtype == 'Chroma':
+        # Chroma 是向量数据库，使用向量查询
+        instruction = """
+            # 角色: 你是一位专业的Chroma向量数据库查询工程师
+            ## 技能: 可以根据Chroma集合结构和用户输入，生成Chroma查询代码（Python）。
+            """
+        examples = """
+            Chroma集合结构如下：
+            # 文档集合（documents）
+            集合名称: documents
+            字段:
+            - id: 字符串（文档唯一标识）
+            - embedding: 向量（文档嵌入向量，维度768）
+            - metadata: 字典（包含title, author, category等字段）
+            - document: 字符串（文档内容）
+
+            用户需求：
+            查询与"人工智能"相关的文档，返回前5条
+
+            生成的Chroma查询代码：
+            results = collection.query(
+                query_texts=["人工智能"],
+                n_results=5
+            )
+        """
+    elif dbtype == 'PostgreSQL':
+        # PostgreSQL 是关系型数据库，使用SQL，但有一些特有语法
+        instruction = """
+            # 角色: 你是一位专业的PostgreSQL SQL编写工程师
+            ## 技能: 可以根据表结构和用户输入，生成PostgreSQL SQL语句。
+            ## 注意: PostgreSQL有特有语法如RETURNING、JSON操作、数组类型等。
+            """
+        examples = """
+            表结构如下：
+            orders (
+                id SERIAL PRIMARY KEY,
+                customer_id INT NOT NULL,
+                product_id INT NOT NULL,
+                price DECIMAL(10, 2) NOT NULL,
+                status INT NOT NULL CHECK (status IN (0, 1, 2)),
+                create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                pay_time TIMESTAMP NULL,
+                FOREIGN KEY (customer_id) REFERENCES customers(id),
+                FOREIGN KEY (product_id) REFERENCES products(id)
+            );
+            customers (
+                id SERIAL PRIMARY KEY,
+                customer_name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) UNIQUE,
+                register_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            products (
+                id SERIAL PRIMARY KEY,
+                product_name VARCHAR(255) NOT NULL,
+                price DECIMAL(10,2) NOT NULL
+            );
+            用户需求：
+            哪个用户消费最高？消费多少？
+
+            生成的PostgreSQL SQL：
+            SELECT customer_id, SUM(price) AS total_spent FROM orders GROUP BY customer_id ORDER BY total_spent DESC LIMIT 1;
+        """
     else:
         # SQL数据库（MySQL、SQL Server、Oracle、SQLite）
         instruction = """
@@ -76,22 +172,22 @@ def gen_prompt(table_structures, sql_requirements, dbtype):
                 customer_id INT NOT NULL,
                 product_id INT NOT NULL,
                 price DECIMAL(10, 2) NOT NULL,
-                STATUS INT NOT NULL CHECK (STATUS IN (0, 1, 2)), -- 确保订单状态在0, 1, 2之间
+                STATUS INT NOT NULL CHECK (STATUS IN (0, 1, 2)),
                 create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 pay_time TIMESTAMP NULL,
                 FOREIGN KEY (customer_id) REFERENCES customers(id),
                 FOREIGN KEY (product_id) REFERENCES products(id)
             );
             customers (
-                id INT PRIMARY KEY NOT NULL, -- 主键，不允许为空
-                customer_name VARCHAR(255) NOT NULL, -- 客户名，不允许为空
-                email VARCHAR(255) UNIQUE, -- 邮箱，唯一
-                register_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- 注册时间，默认为当前时间
+                id INT PRIMARY KEY NOT NULL,
+                customer_name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) UNIQUE,
+                register_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             products (
-                id INT PRIMARY KEY NOT NULL, -- 主键，不允许为空
-                product_name VARCHAR(255) NOT NULL, -- 产品名称，不允许为空
-                price DECIMAL(10,2) NOT NULL -- 价格，不允许为空
+                id INT PRIMARY KEY NOT NULL,
+                product_name VARCHAR(255) NOT NULL,
+                price DECIMAL(10,2) NOT NULL
             );
             用户需求：
             哪个用户消费最高？消费多少？
@@ -122,7 +218,7 @@ def gen_prompt(table_structures, sql_requirements, dbtype):
 # 可视化界面
 def main():
     """
-    Streamlit 主界面函数
+    Streamlit 主界面函数·
     提供用户交互界面，收集输入并调用大模型生成SQL/Redis命令
     """
     # 设置页面标题
@@ -133,7 +229,7 @@ def main():
         st.session_state.generating = False
 
     # 数据库类型选择下拉框
-    dbtype = st.selectbox('请选择数据库类型:', ['MySQL', 'Redis', 'SQL Server', 'Oracle', 'SQLite'])
+    dbtype = st.selectbox('请选择数据库类型:', ['MySQL', 'Redis', 'SQL Server', 'Oracle', 'SQLite', 'PostgreSQL', 'MongoDB', 'Chroma'])
 
     # 获取用户输入的表结构数量（1-10）
     num_tables = st.number_input('请输入你需要填写的表结构数量:', min_value=1, max_value=10, step=1)
